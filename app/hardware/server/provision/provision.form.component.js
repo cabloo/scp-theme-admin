@@ -1,139 +1,165 @@
 (function () {
-  'use strict';
+  "use strict";
 
   var FILTER = {
     GROUP: {
       inventory: true,
     },
     CPU: {
-      part_type: 'cpu',
+      part_type: "cpu",
     },
     MEM: {
-      part_type: 'mem',
+      part_type: "mem",
     },
     DISK: {
-      part_type: 'disk',
+      part_type: "disk",
     },
     ADDON: {
-      part_type: 'add-on',
+      part_type: "add-on",
     },
   };
 
   var INPUT = {
     billing: {
-      max_bandwidth: '',
-      id: '',
+      max_bandwidth: "",
+      id: "",
     },
-    password: '',
-    nickname: '',
+    password: "",
+    nickname: "",
     access: {
       ipmi: true,
-      'switch': true,
+      switch: true,
       pxe: true,
-    }
+    },
   };
 
   angular
-    .module('app.hardware.server.provision')
-    .component('provisionForm', {
+    .module("app.hardware.server.provision")
+    .component("provisionForm", {
       require: {},
       bindings: {
-        form: '=',
-        serverId: '=',
-        clientId: '=',
+        form: "=",
+        serverId: "=",
+        clientId: "=",
       },
-      controller: 'ProvisionFormCtrl as provisionForm',
+      controller: "ProvisionFormCtrl as provisionForm",
       transclude: true,
-      templateUrl: 'app/hardware/server/provision/provision.form.html',
+      templateUrl: "app/hardware/server/provision/provision.form.html",
     })
-    .controller('ProvisionFormCtrl', ProvisionFormCtrl)
-  ;
+    .controller("ProvisionFormCtrl", ProvisionFormCtrl);
 
   /**
    * @ngInject
    */
-  function ProvisionFormCtrl(ClientModal, Select, MultiInput, _, $stateParams, ServerConfig, moment, Modal) {
+  function ProvisionFormCtrl(
+    ClientModal,
+    Select,
+    MultiInput,
+    _,
+    $stateParams,
+    ServerConfig,
+    moment,
+    Modal,
+    PoolSelectIPsModal
+  ) {
     var provisionForm = this;
 
     provisionForm.$onInit = init;
     provisionForm.input = _.clone(INPUT);
-    provisionForm.client = Select('client');
+    provisionForm.client = Select("client");
     provisionForm.createClient = openCreateClientModal;
     provisionForm.bandwidthModal = openBandwidthHelpModal;
-    provisionForm.group = Select('group')
+    provisionForm.group = Select("group")
       .filter(FILTER.GROUP)
-      .on('change', syncGroupToEntities)
-      .on('change', syncHardwareFilters)
-    ;
-    provisionForm.cpu = Select('part')
+      .on("change", syncGroupToEntities)
+      .on("change", syncHardwareFilters);
+    provisionForm.cpu = Select("part")
       .filter(FILTER.CPU)
-      .on('change', syncHardwareFilters);
-    provisionForm.group.on('change', clearCpuOnGroupChange);
-    provisionForm.mem = Select('part')
+      .on("change", syncHardwareFilters);
+    provisionForm.group.on("change", clearCpuOnGroupChange);
+    provisionForm.mem = Select("part")
       .filter(FILTER.MEM)
-      .on('change', syncHardwareFilters);
-    provisionForm.cpu.on('change', clear.bind(null, provisionForm.mem));
+      .on("change", syncHardwareFilters);
+    provisionForm.cpu.on("change", clear.bind(null, provisionForm.mem));
     provisionForm.disks = MultiInput(DiskSelector)
       .setMax(ServerConfig.MAX_DISKS)
       .add()
-      .on(['set', 'add', 'rem', 'change'], syncHardwareFilters)
-    ;
-    provisionForm.mem.on('change', clearMulti.bind(null, provisionForm.disks));
+      .on(["set", "add", "rem", "change"], syncHardwareFilters);
+    provisionForm.mem.on("change", clearMulti.bind(null, provisionForm.disks));
     provisionForm.addOns = MultiInput(AddOnSelector)
       .add()
-      .on('add', syncHardwareFilters)
-    ;
-    provisionForm.mem.on('change', clearMulti.bind(null, provisionForm.addOns));
-    provisionForm.disks.on(['set', 'add', 'rem', 'change'], clearMulti.bind(null, provisionForm.addOns));
-    provisionForm.server = Select('server')
+      .on("add", syncHardwareFilters);
+    provisionForm.mem.on("change", clearMulti.bind(null, provisionForm.addOns));
+    provisionForm.disks.on(
+      ["set", "add", "rem", "change"],
+      clearMulti.bind(null, provisionForm.addOns)
+    );
+    provisionForm.server = Select("server")
       .filter({
         available: true,
-        'parts[exact]': true,
+        "parts[exact]": true,
       })
-      .on('change', syncServer);
-    provisionForm.cpu.on('change', clear.bind(null, provisionForm.server));
-    provisionForm.mem.on('change', clear.bind(null, provisionForm.server));
-    provisionForm.disks.on(['set', 'add', 'rem', 'change'], clear.bind(null, provisionForm.server));
-    provisionForm.addOns.on(['set', 'add', 'rem', 'change'], clear.bind(null, provisionForm.server));
-    provisionForm.osReloads = (new Profiles()).add();
+      .on("change", syncServer);
+    provisionForm.cpu.on("change", clear.bind(null, provisionForm.server));
+    provisionForm.mem.on("change", clear.bind(null, provisionForm.server));
+    provisionForm.disks.on(
+      ["set", "add", "rem", "change"],
+      clear.bind(null, provisionForm.server)
+    );
+    provisionForm.addOns.on(
+      ["set", "add", "rem", "change"],
+      clear.bind(null, provisionForm.server)
+    );
+    provisionForm.osReloads = new Profiles().add();
+    provisionForm.addPoolIP = addPoolIP;
     provisionForm.billing = {
-      integration: Select('integration'),
+      integration: Select("integration"),
       date: {
         value: new Date(),
         options: {
           locale: {
-            format: 'MM/DD/YYYY h:mm A',
-            cancelLabel: 'Clear',
+            format: "MM/DD/YYYY h:mm A",
+            cancelLabel: "Clear",
           },
           autoUpdateInput: false,
           singleDatePicker: true,
           timePicker: true,
           timePickerIncrement: 30,
           eventHandlers: {
-            'cancel.daterangepicker': function () {
-              provisionForm.billing.date.value = '';
+            "cancel.daterangepicker": function () {
+              provisionForm.billing.date.value = "";
             },
-          }
+          },
         },
       },
     };
-    provisionForm.switchSpeed = Select('port-speed');
-    provisionForm.entities = Select('entity')
+    provisionForm.switchSpeed = Select("port-speed");
+    provisionForm.entities = Select("entity")
       .multi()
       .filter({
         available: true,
       })
-      .on('change', syncEntityToGroup);
+      .on("change", syncEntityToGroup);
 
     //////////
 
     function init() {
-      provisionForm.client.setSelectedId($stateParams['client.id']);
-      provisionForm.server.setSelectedId($stateParams['server.id']);
+      provisionForm.client.setSelectedId($stateParams["client.id"]);
+      provisionForm.server.setSelectedId($stateParams["server.id"]);
 
       fillFormInputs();
 
       provisionForm.form.getData = getData;
+    }
+
+    function addPoolIP() {
+      PoolSelectIPsModal.open(provisionForm.group.selected, null)
+        .then(function (poolIPs) {
+          _.map(poolIPs, function (poolIP) {
+            provisionForm.entities.selected.push(poolIP);
+          });
+        })
+        .then(syncEntityFilter);
     }
 
     function syncServer(server) {
@@ -141,12 +167,11 @@
       if (!server) {
         return;
       }
-      server.get()
-        .then(function (res) {
-          provisionForm.server.selected = res;
-        });
+      server.get().then(function (res) {
+        provisionForm.server.selected = res;
+      });
 
-      if (!provisionForm.group.getSelected('id')) {
+      if (!provisionForm.group.getSelected("id")) {
         provisionForm.group.setSelectedId(server.group.id);
       }
 
@@ -155,8 +180,7 @@
         .filter({
           ip_group: server.group.id,
         })
-        .load()
-      ;
+        .load();
     }
 
     function fillFormInputs() {
@@ -171,71 +195,89 @@
     function multiIds(multi) {
       return _(multi.items)
         .map(function (disk) {
-          return disk.getSelected('id');
+          return disk.getSelected("id");
         })
         .filter()
-        .value()
+        .value();
     }
 
     function syncHardwareFilters() {
       var invFilter = {
-        cpu: provisionForm.cpu.getSelected('id') || undefined,
-        mem: provisionForm.mem.getSelected('id') || undefined,
-        ip_group: provisionForm.group.getSelected('id') || undefined,
+        cpu: provisionForm.cpu.getSelected("id") || undefined,
+        mem: provisionForm.mem.getSelected("id") || undefined,
+        ip_group: provisionForm.group.getSelected("id") || undefined,
       };
       var diskIds = multiIds(provisionForm.disks);
       var addOnIds = multiIds(provisionForm.addOns);
       provisionForm.server
         .filter(invFilter)
         .filter({
-          'disks[]': diskIds,
-          'addons[]': addOnIds,
+          "disks[]": diskIds,
+          "addons[]": addOnIds,
         })
         .load();
       provisionForm.cpu
         .filter({
-          inventory: _.pick(invFilter, ['ip_group']),
+          inventory: _.pick(invFilter, ["ip_group"]),
         })
         .load();
       provisionForm.mem
         .filter({
-          inventory: _.pick(invFilter, ['ip_group', 'cpu']),
+          inventory: _.pick(invFilter, ["ip_group", "cpu"]),
         })
         .load();
 
       var selectedCollection = {};
-      _.each({
-        addOns: provisionForm.addOns.items,
-        disks: provisionForm.disks.items
-      }, function (itemSelects, itemKey) {
-        var ids = _.reduce(itemSelects, function (carry, select) {
-          var selected = select.getSelected('id');
-          if (selected) {
-            carry.push(selected);
+      _.each(
+        {
+          addOns: provisionForm.addOns.items,
+          disks: provisionForm.disks.items,
+        },
+        function (itemSelects, itemKey) {
+          var ids = _.reduce(
+            itemSelects,
+            function (carry, select) {
+              var selected = select.getSelected("id");
+              if (selected) {
+                carry.push(selected);
+              }
+              return carry;
+            },
+            []
+          );
+          if (ids.length) {
+            selectedCollection[itemKey] = ids;
           }
-          return carry;
-        }, []);
-        if (ids.length) {
-          selectedCollection[itemKey] = ids;
         }
-      });
+      );
       _.each(provisionForm.addOns.items, function (addOnSelect) {
-        addOnSelect.filter({
-            inventory: _.assign({}, invFilter, _.pick(selectedCollection, ['disks'])),
+        addOnSelect
+          .filter({
+            inventory: _.assign(
+              {},
+              invFilter,
+              _.pick(selectedCollection, ["disks"])
+            ),
           })
           .load();
       });
       _.each(provisionForm.disks.items, function (addOnSelect) {
-        addOnSelect.filter({
-            inventory: _.assign({}, invFilter, _.pick(selectedCollection, ['addOns'])),
+        addOnSelect
+          .filter({
+            inventory: _.assign(
+              {},
+              invFilter,
+              _.pick(selectedCollection, ["addOns"])
+            ),
           })
           .load();
-      })
+      });
     }
 
     function syncEntityToGroup() {
-      var entityGroup = (provisionForm.entities.selected[0] || {}).group || null;
-      if (!entityGroup || provisionForm.group.getSelected('id')) {
+      var entityGroup =
+        (provisionForm.entities.selected[0] || {}).group || null;
+      if (!entityGroup || provisionForm.group.getSelected("id")) {
         syncEntityFilter();
         return;
       }
@@ -250,47 +292,62 @@
     }
 
     function syncEntityFilter() {
+      var primaryEntity = provisionForm.entities.selected[0];
+      var extraFor = primaryEntity
+        ? (
+            primaryEntity.extraForFilter ||
+            new IPEntity(primaryEntity).extraForFilter
+          )()
+        : undefined;
       provisionForm.entities
-        .clearFilter('extra_for_id')
-        .clearFilter('ip_group')
+        .clearFilter("extra_for_id")
+        .clearFilter("ip_group")
         .filter({
-          extra_for_id: _.get(provisionForm, 'entities.selected[0].id'),
-          allow_multiple_vlans: _.get(provisionForm, 'server.selected.switch.allow_multiple_vlans'),
-          ip_group: _.get(provisionForm, 'group.selected.id'),
+          "extra_for[type]": extraFor ? extraFor.type : undefined,
+          "extra_for[id]": extraFor ? extraFor.id : undefined,
+          allow_multiple_vlans: _.get(
+            provisionForm,
+            "server.selected.switch.allow_multiple_vlans"
+          ),
+          ip_group: _.get(provisionForm, "group.selected.id"),
         })
         .load();
     }
 
     function clearCpuOnGroupChange() {
-      if (!provisionForm.server.selected || provisionForm.group.getSelected('id') !== provisionForm.server.selected.group.id) {
+      if (
+        !provisionForm.server.selected ||
+        provisionForm.group.getSelected("id") !==
+          provisionForm.server.selected.group.id
+      ) {
         clear(provisionForm.cpu);
       }
     }
 
-
     function getData() {
       var data = _.clone(provisionForm.input);
 
-      data.entities = _.map(provisionForm.entities.selected, 'id');
+      data.entities = _.map(provisionForm.entities.selected, "id");
       data.switch = {
         speed: {
-          id: provisionForm.switchSpeed.getSelected('id'),
+          id: provisionForm.switchSpeed.getSelected("id"),
         },
       };
       data.group = {
-        id: provisionForm.group.getSelected('id'),
+        id: provisionForm.group.getSelected("id"),
       };
       data.client = {
-        id: provisionForm.client.getSelected('id'),
+        id: provisionForm.client.getSelected("id"),
       };
       data.billing.integration = {
-        id: provisionForm.billing.integration.getSelected('id') || null,
+        id: provisionForm.billing.integration.getSelected("id") || null,
       };
-      data.billing.date = provisionForm.billing.date.value ? moment(provisionForm.billing.date.value)
-        .toISOString() : null;
+      data.billing.date = provisionForm.billing.date.value
+        ? moment(provisionForm.billing.date.value).toISOString()
+        : null;
       data.billing.max_bandwidth = provisionForm.billing.max_bandwidth;
       data.server = {
-        id: provisionForm.server.getSelected('id'),
+        id: provisionForm.server.getSelected("id"),
       };
       provisionForm.osReloads.removeEmpty();
       var osReloadsData = provisionForm.osReloads.getProfilesData();
@@ -300,9 +357,11 @@
       data.profile = {
         id: osReloadsData[0].profile.id,
       };
-      data.edition = !!osReloadsData[0].profile.iso ? {
-        id: osReloadsData[0].edition.id,
-      } : null;
+      data.edition = !!osReloadsData[0].profile.iso
+        ? {
+            id: osReloadsData[0].edition.id,
+          }
+        : null;
       data.license_key = osReloadsData[0].licenseKey;
       data.password = provisionForm.input.password;
       data.disk = {
@@ -315,11 +374,9 @@
     }
 
     function DiskSelector(selected) {
-      var select = Select('part')
+      var select = Select("part")
         .filter(FILTER.DISK)
-        .on('change', syncHardwareFilters)
-      ;
-
+        .on("change", syncHardwareFilters);
       select.selected = selected || null;
       select.load();
 
@@ -327,10 +384,9 @@
     }
 
     function AddOnSelector(selected) {
-      var select = Select('part')
+      var select = Select("part")
         .filter(FILTER.ADDON)
-        .on('change', syncHardwareFilters)
-      ;
+        .on("change", syncHardwareFilters);
       select.selected = selected || null;
       select.load();
 
@@ -355,22 +411,20 @@
     function openCreateClientModal() {
       ClientModal.create()
         .open()
-        .result
-        .then(function (user) {
+        .result.then(function (user) {
           provisionForm.client.selected = user;
         })
-        .catch(function () {
-        });
+        .catch(function () {});
     }
 
     function openBandwidthHelpModal() {
       var lang = "server.form.billing.max_bandwidth.modal";
       return Modal.information(lang)
         .open()
-        .result
-        .then(function () {
-        }, function (res) {
-        });
+        .result.then(
+          function () {},
+          function (res) {}
+        );
     }
 
     function Profiles() {
@@ -379,7 +433,7 @@
 
       this.add = function () {
         profiles.items.push({
-          id: Math.random() // to make ng-repeat work correctly
+          id: Math.random(), // to make ng-repeat work correctly
         });
         return profiles;
       };
@@ -402,14 +456,18 @@
       };
 
       this.removeEmpty = function () {
-        profiles.items = _.reduce(profiles.items, function (accum, profile, i) {
-          if (profile.profileSelected) {
-            accum.push(profile);
-          } else {
-            // TODO?
-          }
-          return accum;
-        }, [])
+        profiles.items = _.reduce(
+          profiles.items,
+          function (accum, profile, i) {
+            if (profile.profileSelected) {
+              accum.push(profile);
+            } else {
+              // TODO?
+            }
+            return accum;
+          },
+          []
+        );
       };
 
       return profiles;

@@ -121,11 +121,12 @@ div(ng-if="!provisionForm.serverId")
       span(ng-bind-html="choice.srv_id | highlight: $select.search")
 
 +label("{{ 'server.form.entities.LABEL' | translate }}")
-  entity-multi-select(
-    placeholder="server.form.entities.PLACEHOLDER"
-    select="provisionForm.entities"
-    allow-multiple-vlans="provisionForm.server.selected.switch.allow_multiple_vlans"
-  )
+  +input-with-btn("fa fa-plus-circle")(ng-click="port.addPoolIP()")
+    entity-multi-select(
+      placeholder="server.form.entities.PLACEHOLDER"
+      select="provisionForm.entities"
+      allow-multiple-vlans="provisionForm.server.selected.switch.allow_multiple_vlans"
+    )
 
 +label("{{ 'server.form.switch.speed.LABEL' | translate }}")
   +ui-select("provisionForm.switchSpeed")
